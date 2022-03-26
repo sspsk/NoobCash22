@@ -22,7 +22,14 @@ class wallet:
 		self.public_key = self.private_key.publickey()
 		self.signer = PKCS1_v1_5.new(self.private_key)
 
+	def get_pubaddress(self):
+		return binascii.hexlify(self.public_key.exportKey(format='DER')).decode('ascii')
 
 
-	# def balance():
-
+	def balance(self,utxolist):
+		bal = 0
+		for item in utxolist:
+			pass
+			#+pare balance apo transactionouput
+	
+		return bal
