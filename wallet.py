@@ -29,7 +29,6 @@ class wallet:
 	def balance(self,utxolist):
 		bal = 0
 		for item in utxolist:
-			pass
-			#+pare balance apo transactionouput
+			bal += item.get_amount()
 	
 		return bal

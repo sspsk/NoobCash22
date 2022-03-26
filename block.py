@@ -5,7 +5,7 @@ import json, datetime
 
 
 class Block:
-	def __init__(self,prev_hash,last_index,capacity):
+	def __init__(self,prev_hash,last_index,capacity,is_genesis=False):
 		##set
 
 		self.index = last_index + 1
@@ -15,6 +15,7 @@ class Block:
 		self.nonce = None
 		self.listOfTransactions = [] #must be of size = capacity
 		self.capacity = capacity
+		self.is_genesis = is_genesis
 	
 	def make_hash(self):
 		h = SHA.new(json.dumps(self.block_to_dict(),sort_keys=True).encode()).hexdigest()
@@ -29,9 +30,15 @@ class Block:
 				'transactions':self.listOfTransactions}
 		return temp
 
-
+	
 	def add_transaction(self,transaction):
 		self.listOfTransactions.append(transaction)
+
+
+	def validate_block(self,last_block): #maybe implement this here
+		pass
+		# 1) check that current hash is correct
+		# 2) check that prev_hash = hash of last_block
 
 
 	#getters & setters
