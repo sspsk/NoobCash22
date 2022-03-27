@@ -7,6 +7,7 @@ import Crypto.Random
 from Crypto.Hash import SHA
 from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
+from uuid import uuid4
 
 # import requests
 # from flask import Flask, jsonify, request, render_template
@@ -23,19 +24,21 @@ class TransactionInput:
         }
         return d 
 
+    def get_id(self):
+        return self.parentOutputId
+
 
 class TransactionOutput:
     def __init__(self, receiver_address, amount):
         self.recipient = receiver_address
         self.amount = amount
-        self.transactionId = None
+        self.transactionId = str(uuid4())
 
     def to_dict(self):
         d = {
             #'sender_address': self.sender_address
             'recipient': self.recipient,
             'amount': self.amount
-
         }
         return d
 
@@ -73,7 +76,7 @@ class Transaction:
         self.amount = amount
         self.transaction_inputs = [TransactionInput(to.get_id()) for to in sender_utxos]
         self.utxos = sender_utxos
-        self.trasnaction_outputs = self.make_transaction_ouputs()
+        self.transaction_outputs = self.make_transaction_ouputs() #we should check the index creation
 
 
         self.hash = self.make_hash() #maybe we need the hex string
@@ -109,3 +112,46 @@ class Transaction:
         out2 = TransactionOutput(self.sender_address,sender_balance-amount)
 
         return  [out1,out2]
+
+    def verify_transaction(self,pub_key):
+        h = self.make_hash()
+        return PKCS1_v1_5.new(pub_key).verify(h,self.signature)
+
+
+
+    def validate_transaction(self,pub_key,utxos_list):
+        if self.verify_transaction(pub_key):
+            #check balance
+            bal = 0
+            for item in self.transaction_inputs:
+                temp_id = item.get_id()
+                found = False
+                temp_utx = []
+                for utxo in utxos_list:
+                    if utxo.get_id() == temp_id:
+                        found = True 
+                        bal += utxo.get_amount()
+                        temp_utx.append(utxo)
+                        utxos_list.remove(utxo)
+                if found == False:
+                    for utxo in temp_utx:   #restore funds on sender in failure
+                        utxos_list.append(utxo)
+                    return False
+            if bal >= self.amount:
+                return True 
+            else:
+                for utxo in temp_utx:   #restore funds on sender in failure
+                    utxos_list.append(utxo)
+                return False
+
+        else:
+            return False
+
+    def get_sender(self):
+        return self.sender_address
+
+    def get_receiver(self):
+        return self.receiver_address
+
+    def get_transaction_outputs(self):
+        return self.trasnaction_outputs

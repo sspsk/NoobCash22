@@ -1,0 +1,36 @@
+sign_transaction --> transaction --done
+create_transaction --> node --done
+broadcast_transaction --> node 
+verify_transaction_signature -->transaction  --done
+validate_transaction --> transaction/node (needs utxos list of current node about the sender node) --done
+mine_block -> node
+broadcast_block --> node
+validate_block --> node/block (the previous block hash) --done
+validate_chain --> node
+resolve_conflict --> node
+
+Process:
+1) create transaction, sign it, broadcast it
+2) receive it, verify it, validate it, place in a block or a pool
+3) if enough transactions, start mining job while collecting new transactions
+4) if block solved or receive block solution, stop mining
+5) validate block, check the block's transactions, those you have
+6) if conflict found( we have a new chain), learn the length of it, adopt the longest chain
+
+
+Objects involved:
+3 simple objects: wallet, transaction, block
+1 client+miner object per node
+1 flask instance per node
+
+Architecture:
+-flask object and client+miner object are singletons, can be read and accessed from everywhere as a single object
+-each endpoint affects client+miner object's internal variables
+-the mining job of client+miner obj runs as a daemon constantly checking if there are enough transactions
+
+
+
+Todo:
+-unique id in TransactionOutputs --done
+-format of public address
+

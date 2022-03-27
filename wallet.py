@@ -14,7 +14,7 @@ from uuid import uuid4
 
 
 
-class wallet:
+class Wallet:
 
 	def __init__(self):
 
@@ -24,6 +24,9 @@ class wallet:
 
 	def get_pubaddress(self):
 		return binascii.hexlify(self.public_key.exportKey(format='DER')).decode('ascii')
+
+	def get_pubkey(self):
+		return self.public_key
 
 
 	def balance(self,utxolist):

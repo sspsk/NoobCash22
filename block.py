@@ -5,13 +5,13 @@ import json, datetime
 
 
 class Block:
-	def __init__(self,prev_hash,last_index,capacity,is_genesis=False):
+	def __init__(self,last_block,capacity,is_genesis=False):
 		##set
 
-		self.index = last_index + 1
+		self.index = last_block.get_index() + 1
 		self.timestamp = datetime.datetime.now()
 		self.hash = None
-		self.previousHash = prev_hash
+		self.previousHash = last_block.get_hash()
 		self.nonce = None
 		self.listOfTransactions = [] #must be of size = capacity
 		self.capacity = capacity
@@ -35,10 +35,17 @@ class Block:
 		self.listOfTransactions.append(transaction)
 
 
-	def validate_block(self,last_block): #maybe implement this here
-		pass
+	def validate_block(self,last_block,difficulty):
 		# 1) check that current hash is correct
 		# 2) check that prev_hash = hash of last_block
+		h = self.make_hash()
+		prefix = '0'*difficulty
+		if not h.startswith(prefix):
+			return 1
+		if last_block.get_hash() != self.previousHash:
+			return 2
+		return 0
+		
 
 
 	#getters & setters
@@ -50,3 +57,6 @@ class Block:
 
 	def set_nonce(self,nonce):
 		self.nonce = nonce 
+
+	def get_index(self):
+		return self.index
