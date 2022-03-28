@@ -1,11 +1,12 @@
 sign_transaction --> transaction --done
 create_transaction --> node --done
-broadcast_transaction --> node 
+broadcast_transaction --> node --done
 verify_transaction_signature -->transaction  --done
 validate_transaction --> transaction/node (needs utxos list of current node about the sender node) --done
-mine_block -> node
-broadcast_block --> node
+mine_block -> node --done
+broadcast_block --> node --done
 validate_block --> node/block (the previous block hash) --done
+receive_block --> node
 validate_chain --> node
 resolve_conflict --> node
 
@@ -32,5 +33,16 @@ Architecture:
 
 Todo:
 -unique id in TransactionOutputs --done
--format of public address
+-format of public address --done
+-restore from new chain
+-register nodes in network and genesis
+-rest
 
+Mining Pocedure:
+-Every verified transaction gets into pool
+-The mining loop(daemon) waits for the pool to have length >= capacity, takes the first #capacity transactions
+-Starts mining
+-if block solved, done, broadcast it
+-if new block arrives: stop mining, put the transactions of the unmined block back to pool(at front)
+-validate the block and remove the containing transactions from the pool
+-else resolve the conflict

@@ -5,16 +5,19 @@ import json, datetime
 
 
 class Block:
-	def __init__(self,last_block,capacity,is_genesis=False):
+	def __init__(self,last_block,is_genesis=False):
 		##set
-
-		self.index = last_block.get_index() + 1
+		if is_genesis:
+			self.index = 0
+			self.previousHash = 1
+		else:
+			self.index = last_block.get_index() + 1
+			self.previousHash = last_block.get_hash()
 		self.timestamp = datetime.datetime.now()
 		self.hash = None
-		self.previousHash = last_block.get_hash()
+		
 		self.nonce = None
 		self.listOfTransactions = [] #must be of size = capacity
-		self.capacity = capacity
 		self.is_genesis = is_genesis
 	
 	def make_hash(self):

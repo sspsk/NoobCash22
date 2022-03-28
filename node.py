@@ -29,13 +29,9 @@ class Node:
 
 
 
-
-
-
-
-
 	def create_new_block(self,last_block,is_genesis):
-		return Block(last_block,config.capacity,is_genesis)
+		self.curr_block = Block(last_block,is_genesis)
+		return self.curr_block
 
 
 	def create_wallet(self):
@@ -108,35 +104,93 @@ class Node:
 
 
 	def add_transaction_to_pool(self,transaction):
-		#add every transaction
 		self.transaction_pool.append(transaction)
 
 
+	
+			
+
+	def mine_block(self):
+		#mine the current block
+		nonce = 0
+		prefix = '0'*self.difficulty
+		solved = False
+
+		while self.mining:
+			self.curr_block.set_nonce(nonce)
+			h = self.curr_block.make_hash()
+
+			if h.startswith(prefix):
+				solved = True
+				break
+
+			nonce += 1
+
+		if not solved: #a block was received,restore transactions
+			for _ in range(self.capacity):
+				self.pool.insert(0,self.curr_block.listOfTransactions.pop())
+			return -1
+		else:
+			return 0
 
 
+	def broadcast_block(self):
+		for key in self.ring:
+			if self.ring[key]['ip'] == self.ip:
+				continue
+			ip = self.ring[key]['ip']
+			port = self.ring[key]['port']
 
-	def mine_block():
-
-
-
-	def broadcast_block():
-
-
-		
-
-	def valid_proof(.., difficulty=MINING_DIFFICULTY):
-
-
-
-
-	#concencus functions
-
-	def valid_chain(self, chain):
-		#check for the longer chain accroose all nodes
-
+			#send the self.curr_block to /receive block url
 
 	def resolve_conflicts(self):
 		#resolve correct chain
+		#ask for length from the broadcaster
+		#adopt larger chain
+		#restore transactions in aborted blocks
+
+
+
+	def receive_block(self,block): #maybe add broadcaster address as an argument(who to ask)
+		last_block = self.chain[-1]
+
+		validated = block.validate_block(last_block,self.difficulty)
+
+		if validated:
+			#remove duplicates, put in the chain
+			pass 
+		else:
+			#resolve conflict
+			pass
+
+
+
+
+	def mining_loop(self): #maybe add this here
+		while True:
+			if len(self.pool) >= self.capacity:
+				#fill the current block and call mine_block()
+				for _ in range(self.capacity):
+					self.curr_block.add_transaction(self.pool.pop(0))
+
+				self.mining = True
+				flag = self.mine_block()
+
+				if flag == 0: #solved the block
+					self.broadcast_block()
+				else: #block received while mining
+					self.receive_block()
+
+			else:
+				pass
+			time.sleep(0.1)
+
+
+	def validate_chain(self, chain):
+		#executed by newcomers
+
+
+	
 
 
 
