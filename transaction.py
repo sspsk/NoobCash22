@@ -8,6 +8,7 @@ from Crypto.Hash import SHA
 from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
 from uuid import uuid4
+import json
 
 # import requests
 # from flask import Flask, jsonify, request, render_template
@@ -15,12 +16,15 @@ from uuid import uuid4
 
 class TransactionInput:
 
-    def __init__(self, transactionoutput):
-        self.parentOutputId = transactionoutput.transactionId
+    def __init__(self, transaction_output,data=None):
+        if data is not None:
+            self.parentOutputId = data['parentOutputId']
+        else:
+            self.parentOutputId = transaction_output.get_id()
 
     def to_dict(self):
         d = {
-            'parentTransaction':self.parentOutputId 
+            'parentOutputId':self.parentOutputId 
         }
         return d 
 
@@ -29,14 +33,18 @@ class TransactionInput:
 
 
 class TransactionOutput:
-    def __init__(self, receiver_address, amount):
+    def __init__(self, receiver_address, amount,data = None):
+        if data is not None:
+            self.recipient = data['recipient']
+            self.amount = data['amount']
+            self.transactionId = data['transactionId']
         self.recipient = receiver_address
         self.amount = amount
         self.transactionId = str(uuid4())
 
     def to_dict(self):
         d = {
-            #'sender_address': self.sender_address
+            'transactionId':self.transactionId,
             'recipient': self.recipient,
             'amount': self.amount
         }
@@ -64,23 +72,41 @@ class TransactionOutput:
 
 class Transaction:
 
-    def __init__(self, sender_wallet, receiver_address, amount, sender_utxos,is_genesis=False):
-
+    def __init__(self, sender_wallet, receiver_address, amount, sender_utxos,is_genesis=False,data=None):
 
         ##set
-        self.is_genesis = is_genesis
 
-        self.sender_wallet = sender_wallet
-        self.sender_address = sender_wallet.get_pubaddress()
-        self.receiver_address = receiver_address
-        self.amount = amount
-        self.transaction_inputs = [TransactionInput(to.get_id()) for to in sender_utxos]
-        self.utxos = sender_utxos
-        self.transaction_outputs = self.make_transaction_ouputs() #we should check the index creation
+        if data is not None:
+            #fill fields from data
+            self.sender_address = data['sender_address']
+            self.receiver_address = data['receiver_address']
+            self.amount = data['amount']
+            self.transaction_inputs = [TransactionInput(None,d) for d in data['transaction_inputs']]
+            self.transaction_outputs = [TransactionOutput(None,None,d) for d in data['transaction_outputs']]
+            self.hash = None 
+            self.signature = binascii.unhexlify(data['signature'])
 
 
-        self.hash = self.make_hash() #maybe we need the hex string
-        self.signature = self.sign_transaction()
+        else:
+            if is_genesis:
+                self.sender_address = 0
+                self.transaction_inputs = []  #no need
+                self.transaction_outputs = []  #no need
+                self.signature = None
+            else:
+                self.sender_address = sender_wallet.get_pubaddress()
+                self.transaction_inputs = [TransactionInput(to) for to in sender_utxos]
+                self.transaction_outputs = self.make_transaction_ouputs(sender_wallet,sender_utxos) #we should check the index creation
+                self.signature = self.sign_transaction(sender_wallet)
+
+
+            self.receiver_address = receiver_address
+            self.amount = amount
+            
+
+
+            self.hash = self.make_hash() #maybe we need the hex string
+            
 
 
 
@@ -89,27 +115,37 @@ class Transaction:
         temp = {'sender_address':self.sender_address,
                 'receiver_address':self.receiver_address,
                 'amount':self.amount,
-                'transaction_inputs':self.transaction_inputs,
-                'trasnaction_outputs':self.trasnaction_outputs
+                'transaction_inputs':[t.to_dict() for t in self.transaction_inputs ],
+                'transaction_outputs':[t.to_dict() for t in self.transaction_outputs]
                  }
         return temp
+    
+    def jsonify_transaction(self):
+        temp = {'sender_address':self.sender_address,
+                'receiver_address':self.receiver_address,
+                'amount':self.amount,
+                'transaction_inputs':[t.to_dict() for t in self.transaction_inputs ],
+                'transaction_outputs':[t.to_dict() for t in self.transaction_outputs],
+                'signature': binascii.hexlify(self.signature).decode('ascii')
+                 }
+        return json.dumps(temp)
         
     def make_hash(self):
         h = SHA.new(json.dumps(self.trans_to_dict(),sort_keys=True).encode())
         self.hash = h
-        # return h
+        return h
 
-    def sign_transaction(self):
+    def sign_transaction(self,wallet):
         """
         Sign transaction with private key
         """
-        s = self.sender_wallet.signer.sign(self.hash)
-        self.signature = s
+        s = wallet.signer.sign(self.hash)
+        return s
     
-    def make_transaction_ouputs(self):
-        sender_balance = self.sender_wallet.balance(self.utxos)
-        out1 = TransactionOutput(self.receiver_address,amount)
-        out2 = TransactionOutput(self.sender_address,sender_balance-amount)
+    def make_transaction_ouputs(self,wallet,sender_utxos):
+        sender_balance = wallet.balance(sender_utxos)
+        out1 = TransactionOutput(self.receiver_address,self.amount)
+        out2 = TransactionOutput(self.sender_address,sender_balance-self.amount)
 
         return  [out1,out2]
 
@@ -147,6 +183,9 @@ class Transaction:
         else:
             return False
 
+    def get_hash(self):
+        return self.hash
+
     def get_sender(self):
         return self.sender_address
 
@@ -154,4 +193,5 @@ class Transaction:
         return self.receiver_address
 
     def get_transaction_outputs(self):
-        return self.trasnaction_outputs
+        # first element = receiver, second = sender
+        return self.transaction_outputs

@@ -3,12 +3,14 @@ create_transaction --> node --done
 broadcast_transaction --> node --done
 verify_transaction_signature -->transaction  --done
 validate_transaction --> transaction/node (needs utxos list of current node about the sender node) --done
+process_transaction --> node(validate transaction + update output utxos)
 mine_block -> node --done
 broadcast_block --> node --done
 validate_block --> node/block (the previous block hash) --done
-receive_block --> node
+receive_block --> node --done
 validate_chain --> node
 resolve_conflict --> node
+mining_loop --> node --done
 
 Process:
 1) create transaction, sign it, broadcast it
@@ -46,3 +48,33 @@ Mining Pocedure:
 -if new block arrives: stop mining, put the transactions of the unmined block back to pool(at front)
 -validate the block and remove the containing transactions from the pool
 -else resolve the conflict
+
+
+Problem:
+Balance of A is 2
+Capacity = 1
+T1: transaction from A to B with amount 2
+T2: transaction from A to C with amount 2
+
+At node 1 the transactions come in this order: T1,T2, at node 2 the transactions come in this order: T2,T1
+So far when we receive a new transaction we validate it, update the UTXOs, put it in a pool, mining daemon places it in a block
+
+So node 1 receives,validates,updates balance and places in pool the T1 first, daemon places T1 in a block and starts mining. Node does the same for T2. Node 1 discards T2 and node 2 discards T1 since validation fails with no funds error. Lets say node 2 solves the block first and broadcasts it. Node 1 places T1 back in the pool and validates the received block. Executes the transactions inside the block and updates the balance. But 1) there are no funds to validate the transactions, 2) even if we fix that T1 now should be removed from pool.
+
+2 Ideas:
+-we should not update the actual ledger when we validate a transaction, we should keep a clean-ledger after every block.
+-this clean-ledger gets updated either when we solve a block or when we receive a correct block.
+-we should not validate the transaction when we receive it, we can validate it when we remove it from the pool to place it in a block.
+
+
+
+APIs
+
+-get_transaction
+-get_block
+-register
+-chain_length
+-get_chain
+-cli_endpoints
+
+

@@ -5,33 +5,46 @@ import json, datetime
 
 
 class Block:
-	def __init__(self,last_block,is_genesis=False):
-		##set
-		if is_genesis:
-			self.index = 0
-			self.previousHash = 1
+	def __init__(self,last_block,is_genesis=False,data=None):
+
+
+		if data is not None:
+			self.index = data['index']
+			self.previousHash = data['previousHash']
+			self.timestamp = data['timestamp']
+			self.nonce = data['nonce']
+			self.hash = None
+			self.listOfTransactions = [Transaction(None,None,None,None,None,d) for d in data['transactions']]
+
+
+
 		else:
-			self.index = last_block.get_index() + 1
-			self.previousHash = last_block.get_hash()
-		self.timestamp = datetime.datetime.now()
-		self.hash = None
-		
-		self.nonce = None
-		self.listOfTransactions = [] #must be of size = capacity
-		self.is_genesis = is_genesis
+			if is_genesis:
+				self.index = 0
+				self.previousHash = 1
+			else:
+				self.index = last_block.get_index() + 1
+				self.previousHash = last_block.get_hash()
+
+			self.timestamp = str(datetime.datetime.now())
+			self.hash = None
+			
+			self.nonce = None
+			self.listOfTransactions = [] #must be of size = capacity
 	
 	def make_hash(self):
 		h = SHA.new(json.dumps(self.block_to_dict(),sort_keys=True).encode()).hexdigest()
 		self.hash = h 
 		return h
 
-	def block_to_dict(self, include_nonce = True):
+	def block_to_dict(self):
 		temp = {'index':self.index,
-				'timestamp':str(self.timestamp),
+				'timestamp':self.timestamp,
 				'previousHash':self.previousHash,
 				'nonce':self.nonce,
-				'transactions':self.listOfTransactions}
+				'transactions':[t.jsonify_transaction() for t in self.listOfTransactions]}
 		return temp
+
 
 	
 	def add_transaction(self,transaction):
