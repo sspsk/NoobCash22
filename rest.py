@@ -75,7 +75,7 @@ def chain_length():
 
 @app.route('/chain')
 def chain():
-    j_chain = [b.to_dict() for b in node.chain]
+    j_chain = [b.block_to_dict() for b in node.chain]
     return jsonify(chain=j_chain)
 
 
@@ -104,6 +104,9 @@ def register():
 def get_info():
     data = request.get_json()
     node.ring = data
+    for key in node.ring:
+        if key not in node.utxos:
+            node.utxos[key] = []
     return jsonify(status='ok')
 
 

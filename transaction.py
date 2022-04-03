@@ -38,9 +38,10 @@ class TransactionOutput:
             self.recipient = data['recipient']
             self.amount = data['amount']
             self.transactionId = data['transactionId']
-        self.recipient = receiver_address
-        self.amount = amount
-        self.transactionId = str(uuid4())
+        else:
+            self.recipient = receiver_address
+            self.amount = amount
+            self.transactionId = str(uuid4())
 
     def to_dict(self):
         d = {
@@ -88,24 +89,26 @@ class Transaction:
 
 
         else:
+            self.receiver_address = receiver_address
+            self.amount = amount
             if is_genesis:
                 self.sender_address = 0
                 self.transaction_inputs = []  #no need
-                self.transaction_outputs = []  #no need
-                self.signature = None
+                self.transaction_outputs = [TransactionOutput(receiver_address,amount)]  #no need
+                self.hash = None
+                self.signature = b'signature'
             else:
                 self.sender_address = sender_wallet.get_pubaddress()
                 self.transaction_inputs = [TransactionInput(to) for to in sender_utxos]
                 self.transaction_outputs = self.make_transaction_ouputs(sender_wallet,sender_utxos) #we should check the index creation
+                self.hash = self.make_hash() #maybe we need the hex string
                 self.signature = self.sign_transaction(sender_wallet)
 
 
-            self.receiver_address = receiver_address
-            self.amount = amount
+            
             
 
-
-            self.hash = self.make_hash() #maybe we need the hex string
+            
             
 
 

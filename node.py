@@ -5,7 +5,7 @@ import config
 from copy import deepcopy
 
 class Node:
-	def __init__(ip,port,bootstrap_ip,bootstrap_port):
+	def __init__(self,ip,port,bootstrap_ip,bootstrap_port):
 
 		##set
 		self.id = None
@@ -15,9 +15,9 @@ class Node:
 		self.bootstrap_port = bootstrap_port
 
 		if self.ip == self.bootstrap_ip:
+			self.id = 0
 			self.node_counter = 0
 
-		self.wallet = None 
 
 		#the blockchain
 		self.chain = []
@@ -28,8 +28,14 @@ class Node:
 		#info about nodes
 		self.ring = {}
 
+		#utxos
+		self.utxos = {}
+
 		#temporary utxos list for reverting, always work on this
 		self.temp_utxos = {}
+
+		#wallet of node
+		self.wallet = self.create_wallet()
 		
 		#reference to current block
 		self.curr_block = None
@@ -57,8 +63,9 @@ class Node:
 
 		self.ring[pubkey] = {'ip':ip,
 							'port':port,
-							'id':self.node_counter,
-							'utxos':[]}
+							'id':self.node_counter}
+
+		self.utxos[pubkey] = []
 
 		#if all nodes connected inform them
 		if self.node_counter == 9:
@@ -86,46 +93,47 @@ class Node:
 	def receive_genesis(self,block):
 		self.chain.append(block)
 		for tx in block.listOfTransactions:
-			self.ring[tx.get_receiver]['utxos'].append(TransactionOutput(tx.get_receiver(),tx.amount))
+			self.utxos[tx.get_receiver].append(TransactionOutput(tx.get_receiver(),tx.amount))
 
 
 
 
 
 
-	def create_new_block(self,last_block,is_genesis):
+	def create_new_block(self,last_block,is_genesis=False):
 		self.curr_block = Block(last_block,is_genesis)
 		#create a new copy of utxos
 		self.temp_utxos = {}
 		for key in self.ring:
-			self.temp_utxos[key] = deepcopy(self.ring[key]['utxos'])
+			self.temp_utxos[key] = deepcopy(self.utxos[key])
 		return self.curr_block
 
 
 	def create_wallet(self):
 		#create a wallet for this node, with a public key and a private key
-		self.wallet = Wallet()
-		pub_address = self.wallet.get_pubaddress()
+		wallet = Wallet()
+		pub_address = wallet.get_pubaddress()
 		self.ring[pub_address] = {'ip':self.ip,
 								'port':self.port,
-								'id':self.id,
-								'utxos': []}
+								'id':self.id}
+		self.utxos[pub_address] = []
 		self.temp_utxos[pub_address] = []
+		return wallet
 
 	def commit_utxos(self,temp_utxos):
 		'''
 		method for updating utxos with temp_utxos
 		'''
 		for key in temp_utxos:
-			self.ring[key]['utxos'] = temp_utxos[key]
+			self.utxos[key] = temp_utxos[key]
 
 
 
-	def create_transaction(self,receiver_address,amount,is_genesis):
+	def create_transaction(self,receiver_address,amount,is_genesis=False):
 		# receiver_address must be hex
 		#we traverse our utxos to find funds
 		sender_pubkey = self.wallet.get_pubaddress()
-		sender_utxos = self.temp_utxos[sender_pubkey] #maybe sort them with amount ----- maybe we should change it with temp_utxos
+		sender_utxos = self.utxos[sender_pubkey] #maybe sort them with amount ----- maybe we should change it with temp_utxos
 
 		utxos_list = [] #temp list containing the neccesarry utxos
 		funds = 0
@@ -157,21 +165,19 @@ class Node:
 			
 
 
-	def process_transaction(transaction,utxos_dict):
+	def process_transaction(self,transaction,utxos_dict):
 		'''
 		Input: a transaction and a dictionary 
 		with key: a public_key and value: a list of utxos
 		like self.temp_utxos
 		'''
 		sender = transaction.get_sender()
-		receiver = transaction.get_receiver()
 
-		sender_utxos = utxos_dict[sender]
-		unhex_sender = RSA.importKey(binascii.unhexlify(sender)) #must be RSA key, not hex
-		if transaction.validate_transaction(unhex_sender,sender_utxos):
+		if transaction.sender_address == 0 or transaction.validate_transaction(RSA.importKey(binascii.unhexlify(sender)),utxos_dict[sender]):
 			trans_outputs = transaction.get_transaction_outputs()
-			utxos_dict[receiver].append(trans_outputs[0])
-			utxos_dict[sender].append(trans_outputs[1])
+			for to in trans_outputs:
+				utxos_dict[to.get_receiver()].append(to)
+
 			return True
 		else:
 			return False
@@ -187,7 +193,8 @@ class Node:
 
 	def get_transaction_from_pool(self):
 		#get transaction from pool,validate, add to current block,update temp_utxos -----instead of receive_transaction
-		transaction = self.pool.pop(0)
+		print(self.transaction_pool)
+		transaction = self.transaction_pool.pop(0)
 
 		res = self.process_transaction(transaction,self.temp_utxos)
 		if res:
@@ -210,6 +217,7 @@ class Node:
 
 			if h.startswith(prefix):
 				solved = True
+				print("Block mined: ",h)
 				break
 
 			nonce += 1
@@ -234,18 +242,27 @@ class Node:
 		#validate and execute the transactions of the chain
 
 		#start with zero balance for every one
+		self.chain = []
 		temp_utxos = {}
 		for key in self.ring:
 			temp_utxos[key] = []
 
 		last_block = None
 		for block in chain:
-			if block.index == 0 or block.validate_block(last_block,self.difficulty):
+			if block.index == 0 or block.validate_block(last_block,self.difficulty)==0:
+
+				if block_index == 0: #even if its not validated, make hash to check the next block
+					block.make_hash()
+
+
 				for tx in block.listOfTransactions:
 					res = self.process_transaction(tx,temp_utxos)
 					if not res:
 						return -1 # a transaction failed of a block failed
+				last_block = block
+				self.chain.append(block)
 			else:
+				print(block.index)
 				return -2 # a block verification failed
 
 		#update the permanent utxos
@@ -287,11 +304,11 @@ class Node:
 	def remove_from_pool(self,transactions_list):
 		seen = set()
 		for t in transactions_list:
-			seen.add(t.get_hash().digest())
+			seen.add(t.make_hash().digest())
 
-		for t in self.pool:
-			if t.get_hash().digest() in seen:
-				self.pool.remove(t)
+		for t in self.transaction_pool:
+			if t.make_hash().digest() in seen:
+				self.transaction_pool.remove(t)
 
 
 
@@ -300,10 +317,10 @@ class Node:
 		block = self.new_block
 		validated = block.validate_block(last_block,self.difficulty)
 
-		if validated:
+		if validated == 0:
 			#put unmined transactions back to pool
 			for tx in self.curr_block.listOfTransactions:
-				self.pool.insert(0,tx)
+				self.transaction_pool.insert(0,tx)
 
 			#remove duplicates between mined and unmined transactions
 			self.remove_from_pool(block.listOfTransactions)
@@ -311,16 +328,8 @@ class Node:
 			#execute the transactions with the clean ledger, while checking for errors
 			for tx in block.listOfTransactions:
 
-				sender = tx.get_sender() #hex address of sender pubkey
-				receiver = tx.get_receiver() #hex address of receiver pubkey
-				sender_utxos = self.ring[sender]['utxos']
-				unhex_sender = RSA.importKey(binascii.unhexlify(sender)) #must be RSA key, not hex
-
-				if tx.validate_transaction(unhex_sender,sender_utxos):  #real utxos this time
-					tx_outputs = tx.get_transaction_outputs()
-					self.ring[receiver]['utxos'].append(tx_outputs[0])
-					self.ring[sender]['utxos'].append(tx_outputs[1])
-				else:
+				done = self.process_transaction(tx,self.utxos)
+				if not done:
 					return -1
 			self.chain.append(self.new_block)
 			return 0

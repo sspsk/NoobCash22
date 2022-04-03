@@ -1,5 +1,6 @@
 from Crypto.Hash import SHA
 import json, datetime
+from transaction import * 
 
 
 
@@ -14,7 +15,7 @@ class Block:
 			self.timestamp = data['timestamp']
 			self.nonce = data['nonce']
 			self.hash = None
-			self.listOfTransactions = [Transaction(None,None,None,None,None,d) for d in data['transactions']]
+			self.listOfTransactions = [Transaction(None,None,None,None,None,json.loads(d)) for d in data['transactions']]
 
 
 
