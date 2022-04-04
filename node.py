@@ -3,6 +3,7 @@ from wallet import Wallet
 from transaction import *
 import config
 from copy import deepcopy
+import requests
 
 class Node:
 	def __init__(self,ip,port,bootstrap_ip,bootstrap_port):
@@ -14,7 +15,7 @@ class Node:
 		self.bootstrap_ip = bootstrap_ip
 		self.bootstrap_port = bootstrap_port
 
-		if self.ip == self.bootstrap_ip:
+		if self.ip == self.bootstrap_ip and self.port == self.bootstrap_port:
 			self.id = 0
 			self.node_counter = 0
 
@@ -50,6 +51,7 @@ class Node:
 		#config parameters
 		self.difficulty = config.difficulty
 		self.capacity = config.capacity
+		self.n_nodes = config.n_nodes
 
 
 
@@ -68,15 +70,18 @@ class Node:
 		self.utxos[pubkey] = []
 
 		#if all nodes connected inform them
-		if self.node_counter == 9:
+		if self.node_counter == self.n_nodes-1:
+
 			for key in self.ring:
-				if self.ring[key]['ip'] == self.ip:
+
+				if key == self.wallet.get_pubaddress(): #dont send the info on self(bootstrap node)
 					continue
 				ip = self.ring[key]['ip']
 				port = self.ring[key]['port']
 
 				data = json.dumps(self.ring)
-				r = requests.post('http://{0}:{1}/info',data=data)
+				r = requests.post('http://{0}:{1}/info'.format(ip,port),data=data)
+				
 
 			self.create_genesis()
 
@@ -86,14 +91,21 @@ class Node:
 		for key in self.ring:
 			t = Transaction(None,key,100,None,True)
 			block.add_transaction(t)
+		block.set_nonce(0)
 		data = json.dumps(block.block_to_dict())
 		for key in self.ring:
-			r = requests.post('http://{0}:{1}/receive_genesis')
+			ip = self.ring[key]['ip']
+			port = self.ring[key]['port']
+			nid = self.ring[key]['id']
+			r = requests.post('http://{0}:{1}/receive_genesis'.format(ip,port),data=data)
+			
 
 	def receive_genesis(self,block):
-		self.chain.append(block)
-		for tx in block.listOfTransactions:
-			self.utxos[tx.get_receiver].append(TransactionOutput(tx.get_receiver(),tx.amount))
+		chain = [block]
+		flag = self.validate_chain(chain)
+		self.create_new_block(self.chain[-1])
+		return flag
+
 
 
 
@@ -156,8 +168,6 @@ class Node:
 	def broadcast_transaction(self,transaction):
 		data = transaction.jsonify_transaction()
 		for key in self.ring:
-			if self.ring[key]['ip'] == self.ip:
-				continue
 			ip = self.ring[key]['ip']
 			port = self.ring[key]['port']
 
@@ -230,8 +240,9 @@ class Node:
 
 	def broadcast_block(self):
 		data = self.curr_block.block_to_dict()
+		data = json.dumps(data)
 		for key in self.ring:
-			if self.ring[key]['ip'] == self.ip:
+			if key == self.wallet.get_pubaddress():
 				continue
 			ip = self.ring[key]['ip']
 			port = self.ring[key]['port']
@@ -251,7 +262,7 @@ class Node:
 		for block in chain:
 			if block.index == 0 or block.validate_block(last_block,self.difficulty)==0:
 
-				if block_index == 0: #even if its not validated, make hash to check the next block
+				if block.index == 0: #even if its not validated, make hash to check the next block
 					block.make_hash()
 
 
@@ -262,7 +273,7 @@ class Node:
 				last_block = block
 				self.chain.append(block)
 			else:
-				print(block.index)
+				
 				return -2 # a block verification failed
 
 		#update the permanent utxos
@@ -279,7 +290,7 @@ class Node:
 		#ask for length from the broadcaster
 
 		max_len = -1
-		max_key
+		max_key = None
 		for key in self.ring:
 			ip = self.ring[key]['ip']
 			port = self.ring[key]['port']
@@ -332,10 +343,11 @@ class Node:
 				if not done:
 					return -1
 			self.chain.append(self.new_block)
-			return 0
 
 		else:
 			self.resolve_conflicts()
+
+		self.block_received = False
 
 
 	

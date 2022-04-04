@@ -131,7 +131,7 @@ class Transaction:
                 'transaction_outputs':[t.to_dict() for t in self.transaction_outputs],
                 'signature': binascii.hexlify(self.signature).decode('ascii')
                  }
-        return json.dumps(temp)
+        return json.dumps(temp,sort_keys=True)
         
     def make_hash(self):
         h = SHA.new(json.dumps(self.trans_to_dict(),sort_keys=True).encode())
