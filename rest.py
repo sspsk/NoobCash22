@@ -2,6 +2,7 @@ import requests
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 import time,json
+from threading import Thread
 
 
 from block import Block
@@ -19,6 +20,11 @@ import config
 app = Flask(__name__)
 CORS(app)
 node = None
+
+
+def mining_daemon(node):
+    print('starting mining_loop...')
+    node.mining_loop()
 
 
 
@@ -119,6 +125,8 @@ def receive_genesis():
     data = request.get_json(force=True)
     block = Block(None,None,data)
     flag = node.receive_genesis(block)
+    t = Thread(target=mining_daemon,args=(node,),daemon=True)
+    t.start()
     return jsonify(status=flag)
 
 

@@ -1,9 +1,13 @@
+from copy import deepcopy
+import requests
+import time
+
+
 from block import Block
 from wallet import Wallet 
 from transaction import *
 import config
-from copy import deepcopy
-import requests
+
 
 class Node:
 	def __init__(self,ip,port,bootstrap_ip,bootstrap_port):
@@ -203,7 +207,6 @@ class Node:
 
 	def get_transaction_from_pool(self):
 		#get transaction from pool,validate, add to current block,update temp_utxos -----instead of receive_transaction
-		print(self.transaction_pool)
 		transaction = self.transaction_pool.pop(0)
 
 		res = self.process_transaction(transaction,self.temp_utxos)
@@ -298,9 +301,16 @@ class Node:
 			length = res.json()['length']
 			if length > max_len:
 				max_key = key
+				max_len = length
+
+		if max_len <= len(self.chain):
+			print("new chain not adopted")
+			return -1
 
 		max_ip = self.ring[max_key]['ip']
 		max_port = self.ring[max_key]['port']
+
+
 
 		res = requests.get('http://{0}:{1}/chain')
 		data = res.json()
@@ -359,6 +369,7 @@ class Node:
 		while True:
 			if not self.block_received:
 				if len(self.curr_block.listOfTransactions) == self.capacity:
+					print("DAEMON:starting mining..")
 					res = self.mine_block()
 					if res == 0:
 						self.chain.append(self.curr_block)
@@ -366,16 +377,21 @@ class Node:
 						#update utxos with temp_utxos
 						self.commit_utxos(self.temp_utxos)
 					else:
+						print("DAEMON:new block received-inloop")
 						self.receive_block()
 					#create new block
 					self.create_new_block(self.chain[-1])
-				elif len(self.pool) > 0:
+				elif len(self.transaction_pool) > 0:
 					self.get_transaction_from_pool()
+					print("DAEMON:added new transaction to current block")
 			else:
+				print("DAEMON:new block received-outloop")
 				self.receive_block()
 				#create new block
 				self.create_new_block(self.chain[-1])
-			time.sleep(0.1)
+
+			time.sleep(0.05)
+			
 
 
 
