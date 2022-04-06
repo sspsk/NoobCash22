@@ -47,6 +47,9 @@ def get_transactions():
 def create_transaction():
     node.lock.acquire(blocking=True) #only on flask thread currently making transcaction
 
+    if node.first_tx_time is None:
+        node.first_tx_time = time.time()
+
     data = request.get_json(force=True)
     
     #get pubkey from id
@@ -133,6 +136,12 @@ def receive_genesis():
     t.start()
     return jsonify(status=flag)
 
+#--------timing endpoints---------
+@app.route('/get_total_time')
+def get_total_time():
+    total_time = node.last_mine_time - node.first_tx_time 
+    return jsonify(time=total_time)
+
 
 #--------testing endpoints------
 
@@ -212,7 +221,6 @@ def modify_last_block():
 
 @app.route('/last_block')
 def last_block():
-
     return jsonify(data=node.chain[-1].block_to_dict())
 
 

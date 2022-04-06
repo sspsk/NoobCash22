@@ -2,12 +2,15 @@ from copy import deepcopy
 import requests
 import time
 from threading import Lock
+import sys
+import random
 
 
 from block import Block
 from wallet import Wallet 
 from transaction import *
 import config
+
 
 
 class Node:
@@ -40,6 +43,9 @@ class Node:
 		#temporary utxos list for reverting, always work on this
 		self.temp_utxos = {}
 
+		#client utxos
+		self.client_utxos = []
+
 		#wallet of node
 		self.wallet = self.create_wallet()
 		
@@ -60,6 +66,10 @@ class Node:
 		self.difficulty = config.difficulty
 		self.capacity = config.capacity
 		self.n_nodes = config.n_nodes
+
+		#timing_parameters
+		self.last_mine_time = None
+		self.first_tx_time = None
 
 
 
@@ -126,6 +136,22 @@ class Node:
 		self.temp_utxos = {}
 		for key in self.ring:
 			self.temp_utxos[key] = deepcopy(self.utxos[key])
+
+		# self.client_utxos = deepcopy(self.utxos[self.wallet.get_pubaddress()])
+		
+		# #remove already used utxos from client utxo
+		# seen = set()
+		# for tx in self.transaction_pool:
+		# 	if tx.get_sender() == self.wallet.get_pubaddress():
+		# 		for ti in tx.transaction_inputs:
+		# 			seen.add(ti.get_id())
+
+		# for utxo in self.client_utxos:
+		# 	if utxo.get_id() in seen:
+		# 		self.client_utxos.remove(utxo)
+
+
+
 		return self.curr_block
 
 
@@ -153,19 +179,20 @@ class Node:
 		# receiver_address must be hex
 		#we traverse our utxos to find funds
 		sender_pubkey = self.wallet.get_pubaddress()
-		sender_utxos = self.temp_utxos[sender_pubkey] #maybe sort them with amount ----- maybe we should change it with temp_utxos
+		sender_utxos = self.temp_utxos[sender_pubkey]
 
 		utxos_list = [] #temp list containing the neccesarry utxos
 		funds = 0
 		for utxo in sender_utxos:
 			funds += utxo.get_amount() 
-			utxos_list.append(utxo) 
+			utxos_list.append(utxo)
 			if funds >= amount:
 				break
 
 		if funds < amount: #we traversed the whole list and still not enough funds
 			print('Not enough funds')
 			return None
+
 
 		t = Transaction(self.wallet,receiver_address,amount,utxos_list,is_genesis)
 		return t
@@ -194,7 +221,11 @@ class Node:
 		if transaction.sender_address == 0 or transaction.validate_transaction(RSA.importKey(binascii.unhexlify(sender)),utxos_dict[sender]):
 			trans_outputs = transaction.get_transaction_outputs()
 			for to in trans_outputs:
-				utxos_dict[to.get_receiver()].append(to)
+				receiver = to.get_receiver()
+				utxos_dict[receiver].append(to)
+
+				# if receiver == self.wallet.get_pubaddress():  #update the client utxos
+				# 	self.client_utxos.append(to)
 
 			return True
 		else:
@@ -213,7 +244,9 @@ class Node:
 		#get transaction from pool,validate, add to current block,update temp_utxos -----instead of receive_transaction
 		transaction = self.transaction_pool.pop(0)
 		print(transaction.transaction_inputs[0].get_id())
+
 		res = self.process_transaction(transaction,self.temp_utxos)
+
 		if res:
 			self.curr_block.add_transaction(transaction)
 			return True
@@ -237,6 +270,7 @@ class Node:
 				print("Block mined: ",h)
 				break
 
+			# nonce = random.randint(0,sys.maxsize)
 			nonce += 1
 
 		if not solved: #a block was received
@@ -365,6 +399,7 @@ class Node:
 				if not done:
 					return -1
 			self.chain.append(self.new_block)
+			self.last_mine_time = time.time()
 
 		else:
 			self.resolve_conflicts()
@@ -385,6 +420,7 @@ class Node:
 					res = self.mine_block()
 					if res == 0:
 						self.chain.append(self.curr_block)
+						self.last_mine_time = time.time()
 						self.broadcast_block()
 						#update utxos with temp_utxos
 						self.commit_utxos(self.temp_utxos)
@@ -403,7 +439,7 @@ class Node:
 				#create new block
 				self.create_new_block(self.chain[-1])
 
-			time.sleep(0.0001)
+			time.sleep(0.000001)
 			
 
 

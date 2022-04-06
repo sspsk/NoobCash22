@@ -78,11 +78,3 @@ APIs
 -cli_endpoints
 
 
-
-
-
-Problem:
-
-utxos = [(1,100)]
-
-u_utxos= [(2,98)]
