@@ -2,7 +2,7 @@ import requests
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 import time,json
-from threading import Thread
+from threading import Thread,Lock
 
 
 from block import Block
@@ -45,7 +45,8 @@ def get_transactions():
 
 @app.route('/create_transaction',methods=['POST'])
 def create_transaction():
-    
+    node.lock.acquire(blocking=True) #only on flask thread currently making transcaction
+
     data = request.get_json(force=True)
     
     #get pubkey from id
@@ -58,9 +59,12 @@ def create_transaction():
     amount = data['amount']
     t = node.create_transaction(receiver_address,amount)
     if t is None:
+        node.lock.release()
         return jsonify(status="not enough funds")
     node.broadcast_transaction(t)
-    
+
+  
+    node.lock.release()
     return jsonify(status='ok')
 
 
@@ -195,6 +199,14 @@ def process_new_block():
 def get_flag():
     return jsonify(node.block_received)
 
+@app.route('/resolve')
+def resolve():
+    flag = node.resolve_conflicts()
+    return jsonify(status=flag)
+@app.route('/modify_last_block')
+def modify_last_block():
+    node.chain[-1].hash = '1234'
+    return jsonify(status='last block changed')
 
 #-----cli------------
 

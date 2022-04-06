@@ -1,6 +1,7 @@
 from copy import deepcopy
 import requests
 import time
+from threading import Lock
 
 
 from block import Block
@@ -50,6 +51,9 @@ class Node:
 
 		#reference to the block that arrived
 		self.new_block = None
+
+		#creating transction lock
+		self.lock = Lock()
 
 
 		#config parameters
@@ -149,7 +153,7 @@ class Node:
 		# receiver_address must be hex
 		#we traverse our utxos to find funds
 		sender_pubkey = self.wallet.get_pubaddress()
-		sender_utxos = self.utxos[sender_pubkey] #maybe sort them with amount ----- maybe we should change it with temp_utxos
+		sender_utxos = self.temp_utxos[sender_pubkey] #maybe sort them with amount ----- maybe we should change it with temp_utxos
 
 		utxos_list = [] #temp list containing the neccesarry utxos
 		funds = 0
@@ -208,7 +212,7 @@ class Node:
 	def get_transaction_from_pool(self):
 		#get transaction from pool,validate, add to current block,update temp_utxos -----instead of receive_transaction
 		transaction = self.transaction_pool.pop(0)
-
+		print(transaction.transaction_inputs[0].get_id())
 		res = self.process_transaction(transaction,self.temp_utxos)
 		if res:
 			self.curr_block.add_transaction(transaction)
@@ -297,7 +301,7 @@ class Node:
 		for key in self.ring:
 			ip = self.ring[key]['ip']
 			port = self.ring[key]['port']
-			res = requests.get('http://{0}:{1}/chain_length')
+			res = requests.get('http://{0}:{1}/chain_length'.format(ip,port))
 			length = res.json()['length']
 			if length > max_len:
 				max_key = key
@@ -312,24 +316,31 @@ class Node:
 
 
 
-		res = requests.get('http://{0}:{1}/chain')
+		res = requests.get('http://{0}:{1}/chain'.format(max_ip,max_port))
 		data = res.json()
 
 		j_chain = data['chain']
 
 		chain = [Block(None,None,data) for data in j_chain]
 
-		self.validate_chain(chain)
+		flag = self.validate_chain(chain)
+		return flag
 
 
 	def remove_from_pool(self,transactions_list):
+
 		seen = set()
 		for t in transactions_list:
-			seen.add(t.make_hash().digest())
+			seen.add(t.make_hash().hexdigest())
+			
+		
+		temp_pool = []
 
 		for t in self.transaction_pool:
-			if t.make_hash().digest() in seen:
-				self.transaction_pool.remove(t)
+			if t.make_hash().hexdigest() not in seen:
+				temp_pool.append(t)
+
+		self.transaction_pool = temp_pool
 
 
 
@@ -340,6 +351,7 @@ class Node:
 
 		if validated == 0:
 			#put unmined transactions back to pool
+			
 			for tx in self.curr_block.listOfTransactions:
 				self.transaction_pool.insert(0,tx)
 
@@ -382,15 +394,16 @@ class Node:
 					#create new block
 					self.create_new_block(self.chain[-1])
 				elif len(self.transaction_pool) > 0:
-					self.get_transaction_from_pool()
-					print("DAEMON:added new transaction to current block")
+					flag = self.get_transaction_from_pool()
+					print("DAEMON:added new transaction to current block. Passed check: ",flag)
+
 			else:
 				print("DAEMON:new block received-outloop")
 				self.receive_block()
 				#create new block
 				self.create_new_block(self.chain[-1])
 
-			time.sleep(0.05)
+			time.sleep(0.0001)
 			
 
 
