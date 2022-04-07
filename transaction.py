@@ -173,12 +173,14 @@ class Transaction:
                         temp_utx.append(utxo)
                         utxos_list.remove(utxo)
                 if found == False:
+                    print("NON EXISTING ID")
                     for utxo in temp_utx:   #restore funds on sender in failure
                         utxos_list.append(utxo)
                     return False
             if bal >= self.amount:
                 return True 
             else:
+                print("NOT ENOUGH FUNDS")
                 for utxo in temp_utx:   #restore funds on sender in failure
                     utxos_list.append(utxo)
                 return False
