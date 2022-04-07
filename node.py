@@ -223,6 +223,8 @@ class Node:
 		for key in self.ring:
 			ip = self.ring[key]['ip']
 			port = self.ring[key]['port']
+			# if ip == self.ip and port == self.port:
+			# 	continue
 
 			res = requests.post('http://{0}:{1}/receive_transaction'.format(ip,port),data=data)
 			
@@ -358,9 +360,7 @@ class Node:
 				max_key = key
 				max_len = length
 
-		if max_len <= len(self.chain):
-			print("new chain not adopted")
-			return -1
+		
 
 		max_ip = self.ring[max_key]['ip']
 		max_port = self.ring[max_key]['port']
@@ -403,6 +403,7 @@ class Node:
 		if validated == 0:
 			#put unmined transactions back to pool
 			
+			self.curr_block.listOfTransactions.reverse() #must be placed back with the order the got inserted
 			for tx in self.curr_block.listOfTransactions:
 				self.transaction_pool.insert(0,tx)
 

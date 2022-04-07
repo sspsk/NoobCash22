@@ -32,6 +32,13 @@ if __name__=="__main__":
 	node3 = '192.168.1.1:5000'
 	node4 = '192.168.1.5:5000'
 
+	# node0 = '127.0.0.1:5000'
+	# node1 = '127.0.0.1:5001'
+	# node2 = '127.0.0.1:5002'
+	# node3 = '127.0.0.1:5003'
+	# node4 = '127.0.0.1:5004'
+
+
 
 	res = requests.get('http://{0}/register'.format(node1)) #gets node id 1
 	res = requests.get('http://{0}/register'.format(node2)) #gets node id 2
