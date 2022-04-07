@@ -58,8 +58,9 @@ class Node:
 		#reference to the block that arrived
 		self.new_block = None
 
-		#creating transction lock
-		self.lock = Lock()
+		#Synchronization
+		self.lock = Lock() #for managing client_utxos
+		self.chain_lock  = Lock()#for using chain(competition between node and rest "chain,chain_length" urls)
 
 
 		#config parameters
@@ -124,7 +125,10 @@ class Node:
 	def receive_genesis(self,block):
 		chain = [block]
 		flag = self.validate_chain(chain)
+
+		self.chain_lock.acquire(blocking=True)
 		self.create_new_block(self.chain[-1])
+		self.chain_lock.release()
 
 		for utxo in self.utxos[self.wallet.get_pubaddress()]:  #client utxo initialized
 			self.client_utxos.append(deepcopy(utxo))
@@ -313,6 +317,8 @@ class Node:
 		#validate and execute the transactions of the chain
 
 		#start with zero balance for every one
+		print("into validate_chain")
+		self.chain_lock.acquire(blocking=True)
 		self.chain = []
 		temp_utxos = {}
 		for key in self.ring:
@@ -325,11 +331,11 @@ class Node:
 				if block.index == 0: #even if its not validated, make hash to check the next block
 					block.make_hash()
 
-
+				
 				for tx in block.listOfTransactions:
 					res = self.process_transaction(tx,temp_utxos)
 					if not res:
-						return -1 # a transaction failed of a block failed
+						return -1 # a transaction of a block failed
 				last_block = block
 				self.chain.append(block)
 			else:
@@ -338,6 +344,8 @@ class Node:
 
 		#update the permanent utxos
 		self.commit_utxos(temp_utxos)
+		self.chain_lock.release()
+		print("out of validate chain")
 
 		return 0
 
@@ -396,13 +404,18 @@ class Node:
 
 
 	def receive_block(self): 
+		print("into first lock")
+		self.chain_lock.acquire(blocking=True)
 		last_block = self.chain[-1]
+		self.chain_lock.release()
+		print("out of first lock")
+
 		block = self.new_block
 		validated = block.validate_block(last_block,self.difficulty)
 
 		if validated == 0:
 			#put unmined transactions back to pool
-			
+			print("validated")
 			self.curr_block.listOfTransactions.reverse() #must be placed back with the order the got inserted
 			for tx in self.curr_block.listOfTransactions:
 				self.transaction_pool.insert(0,tx)
@@ -416,10 +429,17 @@ class Node:
 				done = self.process_transaction(tx,self.utxos)
 				if not done:
 					return -1
+
+			print("into lock")
+			self.chain_lock.acquire(blocking=True)
 			self.chain.append(self.new_block)
+			self.chain_lock.release()
+			print("out of  lock")
+
 			self.last_mine_time = time.time()
 
 		else:
+			print("resolving conflicts")
 			self.resolve_conflicts()
 
 		self.block_received = False
@@ -437,7 +457,10 @@ class Node:
 					print("DAEMON:starting mining..")
 					res = self.mine_block()
 					if res == 0:
+						self.chain_lock.acquire(blocking=True)
 						self.chain.append(self.curr_block)
+						self.chain_lock.release()
+
 						self.last_mine_time = time.time()
 						self.broadcast_block()
 						#update utxos with temp_utxos

@@ -86,12 +86,17 @@ def receive_block():
 
 @app.route('/chain_length')
 def chain_length():
-    return jsonify(length = len(node.chain))    
+    node.chain_lock.acquire(blocking=True)
+    length = len(node.chain)
+    node.chain_lock.release()
+    return jsonify(length = length )   
 
 
 @app.route('/chain')
 def chain():
+    node.chain_lock.acquire(blocking=True)
     j_chain = [b.block_to_dict() for b in node.chain]
+    node.chain_lock.release()
     return jsonify(chain=j_chain)
 
 
