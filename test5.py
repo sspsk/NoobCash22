@@ -26,19 +26,26 @@ if __name__=="__main__":
 
 	#put the right ips
 
-	res = requests.get('http://127.0.0.1:5001/register') #gets node id 1
-	res = requests.get('http://127.0.0.1:5002/register') #gets node id 2
-	res = requests.get('http://127.0.0.1:5003/register') #gets node id 3
-	res = requests.get('http://127.0.0.1:5004/register') #gets node id 4
+	node0 = '192.168.1.4:5000'
+	node1 = '192.168.1.2:5000'
+	node2 = '192.168.1.3:5000'
+	node3 = '192.168.1.1:5000'
+	node4 = '192.168.1.5:5000'
+
+
+	res = requests.get('http://{0}/register'.format(node1)) #gets node id 1
+	res = requests.get('http://{0}/register'.format(node2)) #gets node id 2
+	res = requests.get('http://{0}/register'.format(node3)) #gets node id 3
+	res = requests.get('http://{0}/register'.format(node4)) #gets node id 4
  
     #-------------everyone has 100 coins--------------------------------
 
 
-	t0 = Thread(target=exec_transactions,args=('127.0.0.1:5000','5nodes/transactions0.txt'))
-	t1 = Thread(target=exec_transactions,args=('127.0.0.1:5001','5nodes/transactions1.txt'))
-	t2 = Thread(target=exec_transactions,args=('127.0.0.1:5002','5nodes/transactions2.txt'))
-	t3 = Thread(target=exec_transactions,args=('127.0.0.1:5003','5nodes/transactions3.txt'))
-	t4 = Thread(target=exec_transactions,args=('127.0.0.1:5004','5nodes/transactions4.txt'))
+	t0 = Thread(target=exec_transactions,args=(node0,'5nodes/transactions0.txt'))
+	t1 = Thread(target=exec_transactions,args=(node1,'5nodes/transactions1.txt'))
+	t2 = Thread(target=exec_transactions,args=(node2,'5nodes/transactions2.txt'))
+	t3 = Thread(target=exec_transactions,args=(node3,'5nodes/transactions3.txt'))
+	t4 = Thread(target=exec_transactions,args=(node4,'5nodes/transactions4.txt'))
 
 	t0.start()
 	t1.start()
