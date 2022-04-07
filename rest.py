@@ -39,13 +39,14 @@ def get_transactions():
     
     data = request.get_json(force=True)
     tx= transaction.Transaction(None,None,None,None,None,data)
+    node.receive_transaction(tx)
     node.add_transaction_to_pool(tx)
     return jsonify(status='ok')
 
 
 @app.route('/create_transaction',methods=['POST'])
 def create_transaction():
-    node.lock.acquire(blocking=True) #only on flask thread currently making transcaction
+     
 
     if node.first_tx_time is None:
         node.first_tx_time = time.time()
@@ -62,12 +63,11 @@ def create_transaction():
     amount = data['amount']
     t = node.create_transaction(receiver_address,amount)
     if t is None:
-        node.lock.release()
         return jsonify(status="not enough funds")
     node.broadcast_transaction(t)
 
   
-    node.lock.release()
+    
     return jsonify(status='ok')
 
 

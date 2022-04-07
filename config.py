@@ -1,4 +1,4 @@
 difficulty = 4
-capacity = 5
-n_nodes = 3
+capacity = 1
+n_nodes = 5
 

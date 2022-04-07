@@ -71,6 +71,9 @@ class Node:
 		self.last_mine_time = None
 		self.first_tx_time = None
 
+		#monitoring 
+		self.tx_processed = 0
+
 
 
 
@@ -122,6 +125,10 @@ class Node:
 		chain = [block]
 		flag = self.validate_chain(chain)
 		self.create_new_block(self.chain[-1])
+
+		for utxo in self.utxos[self.wallet.get_pubaddress()]:  #client utxo initialized
+			self.client_utxos.append(deepcopy(utxo))
+
 		return flag
 
 
@@ -137,21 +144,7 @@ class Node:
 		for key in self.ring:
 			self.temp_utxos[key] = deepcopy(self.utxos[key])
 
-		# self.client_utxos = deepcopy(self.utxos[self.wallet.get_pubaddress()])
-		
-		# #remove already used utxos from client utxo
-		# seen = set()
-		# for tx in self.transaction_pool:
-		# 	if tx.get_sender() == self.wallet.get_pubaddress():
-		# 		for ti in tx.transaction_inputs:
-		# 			seen.add(ti.get_id())
-
-		# for utxo in self.client_utxos:
-		# 	if utxo.get_id() in seen:
-		# 		self.client_utxos.remove(utxo)
-
-
-
+	
 		return self.curr_block
 
 
@@ -162,8 +155,10 @@ class Node:
 		self.ring[pub_address] = {'ip':self.ip,
 								'port':self.port,
 								'id':self.id}
+
 		self.utxos[pub_address] = []
 		self.temp_utxos[pub_address] = []
+		self.client_utxos = []
 		return wallet
 
 	def commit_utxos(self,temp_utxos):
@@ -178,12 +173,15 @@ class Node:
 	def create_transaction(self,receiver_address,amount,is_genesis=False):
 		# receiver_address must be hex
 		#we traverse our utxos to find funds
-		sender_pubkey = self.wallet.get_pubaddress()
-		sender_utxos = self.temp_utxos[sender_pubkey]
+		# sender_pubkey = self.wallet.get_pubaddress()
+		# sender_utxos = self.temp_utxos[sender_pubkey]
 
+		self.lock.acquire(blocking=True)
+
+		
 		utxos_list = [] #temp list containing the neccesarry utxos
 		funds = 0
-		for utxo in sender_utxos:
+		for utxo in self.client_utxos:
 			funds += utxo.get_amount() 
 			utxos_list.append(utxo)
 			if funds >= amount:
@@ -191,12 +189,32 @@ class Node:
 
 		if funds < amount: #we traversed the whole list and still not enough funds
 			print('Not enough funds')
+			self.lock.release()
 			return None
 
+		#if the tx is going to be created, remove used funds
+		for utxo in utxos_list:
+			self.client_utxos.remove(utxo)
 
 		t = Transaction(self.wallet,receiver_address,amount,utxos_list,is_genesis)
+
+
+		# #get change
+		# for to in t.get_transaction_outputs():
+		# 	if to.get_receiver() == self.wallet.get_pubaddress():
+		# 		self.client_utxos.append(to)
+
+		self.lock.release()
+
 		return t
 		
+
+	def receive_transaction(self,transaction):
+		self.lock.acquire(blocking=True) #create_transaction & receive_transaction should not update client_utxos asychronously
+		for to in transaction.get_transaction_outputs():
+			if to.get_receiver() == self.wallet.get_pubaddress():
+				self.client_utxos.append(to)
+		self.lock.release()
 
 
 
@@ -224,8 +242,6 @@ class Node:
 				receiver = to.get_receiver()
 				utxos_dict[receiver].append(to)
 
-				# if receiver == self.wallet.get_pubaddress():  #update the client utxos
-				# 	self.client_utxos.append(to)
 
 			return True
 		else:
@@ -241,9 +257,10 @@ class Node:
 
 
 	def get_transaction_from_pool(self):
-		#get transaction from pool,validate, add to current block,update temp_utxos -----instead of receive_transaction
+		#get transaction from pool,validate, add to current block,update temp_utxos 
+		self.tx_processed += 1
+
 		transaction = self.transaction_pool.pop(0)
-		print(transaction.transaction_inputs[0].get_id())
 
 		res = self.process_transaction(transaction,self.temp_utxos)
 
@@ -429,6 +446,7 @@ class Node:
 						self.receive_block()
 					#create new block
 					self.create_new_block(self.chain[-1])
+					print("MONITOR::Tx processed: ",self.tx_processed)
 				elif len(self.transaction_pool) > 0:
 					flag = self.get_transaction_from_pool()
 					print("DAEMON:added new transaction to current block. Passed check: ",flag)
